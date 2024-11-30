@@ -9,7 +9,9 @@ package Controlador;
  * @author Joaquin
  */
 import Modelo.dao.Detalle_PedidoDAO;
+import Modelo.dao.PedidosDAO;
 import Modelo.dto.Detalle_Pedido;
+import Modelo.dto.Pedidos;
 import java.io.IOException;
 import java.util.List;
 import javax.servlet.ServletException;
@@ -33,14 +35,20 @@ public class ControlDetallePedido extends HttpServlet {
             try {
                 int pedidoId = Integer.parseInt(pedidoIdStr);
 
+                // Obtener los detalles del pedido
                 Detalle_PedidoDAO detallePedidoDAO = new Detalle_PedidoDAO();
                 List<Detalle_Pedido> listaDetalles = detallePedidoDAO.getDetallePedidosByPedidoId(pedidoId, userId);
+                
+                // Obtener el pedido
+                PedidosDAO pedidosDAO = new PedidosDAO();
+                Pedidos pedido = pedidosDAO.get(pedidoId);  // Obtener el pedido correspondiente
 
-                // Verificar si se encontró al menos un detalle
-                if (!listaDetalles.isEmpty()) {
+                // Verificar si se encontró al menos un detalle y el pedido
+                if (!listaDetalles.isEmpty() && pedido != null) {
                     request.setAttribute("listaDetalles", listaDetalles);
+                    request.setAttribute("pedido", pedido);  // Pasar el pedido como atributo al JSP
                 } else {
-                    request.setAttribute("mensajeError", "No se encontraron detalles para este pedido.");
+                    request.setAttribute("mensajeError", "No se encontraron detalles o el pedido.");
                 }
 
                 request.getRequestDispatcher("/Vista/DetallesDePedidos/DetallePedidoRosa.jsp").forward(request, response);

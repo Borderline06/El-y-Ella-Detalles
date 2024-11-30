@@ -49,9 +49,9 @@ public class ControlLogin extends HttpServlet {
                 // Si el login es exitoso pero no tiene ID 1, redirigir a AfterLogin.jsp
                 response.sendRedirect(request.getContextPath() + "/Vista/AfterLogin.jsp");
             }
-        } else {
-            // Si falla, redirige de nuevo a login.jsp con un mensaje de error
-            request.setAttribute("errorMessage", "Correo o contraseña incorrectos");
+       } else {
+            // Si las credenciales son incorrectas, añade un atributo para mostrar la alerta
+            request.setAttribute("loginFallido", true);
             RequestDispatcher dispatcher = request.getRequestDispatcher("/Vista/login.jsp");
             dispatcher.forward(request, response);
         }

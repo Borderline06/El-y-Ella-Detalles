@@ -44,6 +44,8 @@ public class MainControler extends HttpServlet {
     private ComentariosDAO comentariosDAO;
     private PedidosDAO pedidosDAO;
     private PagoDAO pagoDAO;
+    private CarritoDAO carritoDAO; // Añadido para gestionar el carrito
+    private Detalle_PedidoDAO detallePedidoDAO;
 
     @Override
     public void init() {
@@ -52,6 +54,8 @@ public class MainControler extends HttpServlet {
         comentariosDAO = new ComentariosDAO();
         pedidosDAO = new PedidosDAO();
         pagoDAO = new PagoDAO();
+        carritoDAO = new CarritoDAO(); // Inicializar el DAO del carrito
+        detallePedidoDAO = new Detalle_PedidoDAO(); // Inicializar el DAO de Detalle_Pedido
     }
 
     @Override
@@ -125,6 +129,30 @@ public class MainControler extends HttpServlet {
                     break;
                 case "eliminarPago":
                     eliminarPago(request, response);
+                    break;
+
+                case "editarCarrito":
+                    editarCarrito(request, response);
+                    break;
+                case "actualizarCarrito":
+                    actualizarCarrito(request, response);
+                    break;
+                case "eliminarCarrito":
+                    eliminarCarrito(request, response);
+                    break;
+                case "eliminarCarritoCliente": // Este es el nuevo caso
+                    eliminarCarritoCliente(request, response); // Llamada al nuevo método
+                    break;
+
+                // Acciones para Detalle_Pedido
+                case "editarDetallePedido":
+                    editarDetallePedido(request, response);
+                    break;
+                case "actualizarDetallePedido":
+                    actualizarDetallePedido(request, response);
+                    break;
+                case "eliminarDetallePedido":
+                    eliminarDetallePedido(request, response);
                     break;
                 default:
                     listarUsuarios(request, response);
@@ -273,29 +301,76 @@ public class MainControler extends HttpServlet {
         request.setAttribute("pedido", pedido);
 
         // Redirigir al formulario de edición
-        RequestDispatcher dispatcher = request.getRequestDispatcher("/Vista/FormulariosdeEdicion/editarPedido.jsp");
+        RequestDispatcher dispatcher = request.getRequestDispatcher("/Vista/FormulariosdeEdicion/editarPedidos.jsp");
         dispatcher.forward(request, response);
     }
 
     private void actualizarPedido(HttpServletRequest request, HttpServletResponse response)
-        throws ServletException, IOException {
-    // Obtener los datos actualizados del formulario
-    int id = Integer.parseInt(request.getParameter("id"));
-    int userId = Integer.parseInt(request.getParameter("user_id"));
-    double total = Double.parseDouble(request.getParameter("total"));
-    String estado = request.getParameter("estado");
-    Date fechaPedido = Date.valueOf(request.getParameter("fecha_pedido")); // Asegúrate de que el campo en el formulario sea correcto
+            throws ServletException, IOException {
+        try {
+            // Obtener los parámetros
+            String idStr = request.getParameter("id");
+            String userIdStr = request.getParameter("userId");
+            String totalStr = request.getParameter("total");
+            String estado = request.getParameter("estado");
+            String fechaPedidoStr = request.getParameter("fechaPedido");
 
-    // Crear el objeto Pedidos con los datos actualizados
-    Pedidos pedidoActualizado = new Pedidos(id, userId, total, estado, (java.sql.Date) fechaPedido); // Incluye la fecha
+            // Convertir los parámetros y validar
+            if (idStr == null || idStr.isEmpty()) {
+                throw new IllegalArgumentException("El ID del pedido no puede estar vacío.");
+            }
+            if (userIdStr == null || userIdStr.isEmpty()) {
+                throw new IllegalArgumentException("El ID del usuario no puede estar vacío.");
+            }
+            if (totalStr == null || totalStr.isEmpty()) {
+                throw new IllegalArgumentException("El total no puede estar vacío.");
+            }
 
-    // Llamar al método de actualización en PedidosDAO usando la instancia
-    pedidosDAO.update(pedidoActualizado);
+            int id = Integer.parseInt(idStr);
+            int userId = Integer.parseInt(userIdStr);
+            double total = Double.parseDouble(totalStr);
 
-    // Redirigir a la página de administración de pedidos
-    response.sendRedirect(request.getContextPath() + "/Vista/AdministrarPedidos.jsp");
-}
+            // Si el estado es "En_transito", mapearlo a "En tránsito"
+            if ("En_transito".equals(estado)) {
+                estado = "En tránsito";
+            }
 
+            // Validar y convertir la fecha (fechaPedido)
+            Date fechaPedido = null;
+            if (fechaPedidoStr != null && !fechaPedidoStr.isEmpty()) {
+                fechaPedido = Date.valueOf(fechaPedidoStr);  // Asegúrate de que el formato sea correcto (yyyy-MM-dd)
+            } else {
+                throw new IllegalArgumentException("La fecha del pedido no es válida.");
+            }
+
+            // Crear el objeto Pedido actualizado
+            Pedidos pedidoActualizado = new Pedidos(id, userId, total, estado, fechaPedido);
+
+            // Actualizar el pedido en la base de datos
+            PedidosDAO pedidosDAO = new PedidosDAO();
+            boolean actualizado = pedidosDAO.update(pedidoActualizado);
+
+            if (actualizado) {
+                response.sendRedirect(request.getContextPath() + "/Vista/Administrar.jsp");
+            } else {
+                request.setAttribute("mensajeError", "Error al actualizar el pedido.");
+                request.getRequestDispatcher("/Vista/Error.jsp").forward(request, response);
+            }
+
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+            request.setAttribute("mensajeError", "Formato de número inválido. Por favor, ingresa un número válido.");
+            request.getRequestDispatcher("/Vista/Error.jsp").forward(request, response);
+        } catch (IllegalArgumentException e) {
+            e.printStackTrace();
+            request.setAttribute("mensajeError", e.getMessage());
+            request.getRequestDispatcher("/Vista/Error.jsp").forward(request, response);
+        } catch (Exception e) {
+            e.printStackTrace();
+            request.setAttribute("mensajeError", "Error inesperado al actualizar el pedido.");
+            request.getRequestDispatcher("/Vista/Error.jsp").forward(request, response);
+        }
+    }
 
     private void eliminarPedido(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
@@ -361,6 +436,124 @@ public class MainControler extends HttpServlet {
         pagoDAO.eliminar(id);
 
         // Redirigir a la página de administración de pagos
+        response.sendRedirect(request.getContextPath() + "/Vista/Administrar.jsp");
+    }
+
+    // Método para editar un carrito (modificado para parecerse al método editarFlor)
+    private void editarCarrito(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        int id = Integer.parseInt(request.getParameter("id"));
+        System.out.println("ID recibido para edición: " + id); // Log para verificar el ID
+
+        Carrito carrito = carritoDAO.get(id); // Obtiene el carrito por ID
+
+        if (carrito != null) {
+            System.out.println("Carrito encontrado: " + carrito.toString()); // Log para verificar el carrito
+            request.setAttribute("carrito", carrito); // Establece el objeto carrito en la solicitud
+            RequestDispatcher dispatcher = request.getRequestDispatcher("/Vista/FormulariosdeEdicion/editarCarrito.jsp");
+            dispatcher.forward(request, response);
+        } else {
+            System.out.println("El carrito es nulo para el ID: " + id); // Log si el carrito es nulo
+            response.getWriter().println("El carrito con ID " + id + " no se encontró.");
+        }
+    }
+
+    // Método para actualizar un carrito
+    private void actualizarCarrito(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        int idCarrito = Integer.parseInt(request.getParameter("idCarrito"));
+        int userId = Integer.parseInt(request.getParameter("userId"));
+        int florId = Integer.parseInt(request.getParameter("florId"));
+        int cantidad = Integer.parseInt(request.getParameter("cantidad"));
+        double precio = Double.parseDouble(request.getParameter("precio"));
+
+        // Crear el objeto Carrito con los datos actualizados
+        Carrito carritoActualizado = new Carrito(idCarrito, userId, florId, cantidad, precio);
+        carritoDAO.update(carritoActualizado);
+
+        // Redirigir a la página de administración de carritos
+        response.sendRedirect(request.getContextPath() + "/Vista/Administrar.jsp");
+    }
+
+    // Método para eliminar un carrito
+    private void eliminarCarrito(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        int id = Integer.parseInt(request.getParameter("id"));
+        carritoDAO.eliminar(id);
+        response.sendRedirect(request.getContextPath() + "/Vista/Administrar.jsp");
+    }
+
+    private void eliminarCarritoCliente(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        int id = Integer.parseInt(request.getParameter("id"));
+
+        // Eliminar el carrito
+        boolean eliminado = carritoDAO.eliminar(id);
+
+        // Redirigir a la página del carrito después de la eliminación
+        if (eliminado) {
+            response.sendRedirect(request.getContextPath() + "/Vista/carshop.jsp");
+        } else {
+            response.getWriter().println("No se pudo eliminar el producto del carrito.");
+        }
+    }
+
+    // Método para editar un detalle de pedido
+    private void editarDetallePedido(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        int id = Integer.parseInt(request.getParameter("id"));
+        Detalle_Pedido detallePedido = detallePedidoDAO.get(id); // Obtiene el detalle de pedido por ID
+
+        if (detallePedido != null) {
+            request.setAttribute("detallePedido", detallePedido); // Establece el objeto como atributo de la solicitud
+            RequestDispatcher dispatcher = request.getRequestDispatcher("/Vista/FormulariosdeEdicion/editarDetPedidos.jsp");
+            dispatcher.forward(request, response); // Redirige al JSP de edición
+        } else {
+            System.out.println("Detalle de pedido no encontrado para el ID: " + id);
+            response.getWriter().println("El detalle de pedido con ID " + id + " no se encontró.");
+        }
+    }
+
+// Método para actualizar un detalle de pedido
+    private void actualizarDetallePedido(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        int idDetalle = Integer.parseInt(request.getParameter("detalle_id"));
+        int pedidoId = Integer.parseInt(request.getParameter("pedido_id"));
+        int florId = Integer.parseInt(request.getParameter("flor_id"));
+        int cantidad = Integer.parseInt(request.getParameter("cantidad"));
+        double precio = Double.parseDouble(request.getParameter("precio"));
+
+        // Crear el objeto Detalle_Pedido con los datos actualizados
+        Detalle_Pedido detallePedidoActualizado = new Detalle_Pedido(idDetalle, pedidoId, florId, cantidad, precio);
+
+        // Actualizar el detalle de pedido en la base de datos
+        boolean isUpdated = detallePedidoDAO.update(detallePedidoActualizado);
+
+        if (isUpdated) {
+            System.out.println("Detalle de pedido actualizado correctamente: " + detallePedidoActualizado);
+        } else {
+            System.out.println("No se pudo actualizar el detalle de pedido: " + detallePedidoActualizado);
+        }
+
+        // Redirigir a la página de administración de pedidos
+        response.sendRedirect(request.getContextPath() + "/Vista/Administrar.jsp");
+    }
+
+// Método para eliminar un detalle de pedido
+    private void eliminarDetallePedido(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        int id = Integer.parseInt(request.getParameter("id"));
+
+        // Eliminar el detalle de pedido en la base de datos
+        boolean isDeleted = detallePedidoDAO.eliminar(id);
+
+        if (isDeleted) {
+            System.out.println("Detalle de pedido eliminado correctamente para el ID: " + id);
+        } else {
+            System.out.println("No se pudo eliminar el detalle de pedido para el ID: " + id);
+        }
+
+        // Redirigir a la página de administración de pedidos
         response.sendRedirect(request.getContextPath() + "/Vista/Administrar.jsp");
     }
 
